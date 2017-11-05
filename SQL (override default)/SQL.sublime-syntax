@@ -1,0 +1,73 @@
+%YAML 1.2
+---
+# http://www.sublimetext.com/docs/3/syntax.html
+name: Override SQL default
+scope: source.sql
+contexts:
+  main:
+    - match: 'XXXXXXNLINDNER'
+      scope: keyword.other.test.sql
+  block-comments:
+    - match: /\*
+      comment: " Fixed bug comment.block where was named comment.block.c. Nested block comments are legal per https://docs.microsoft.com/en-us/sql/t-sql/language-elements/slash-star-comment-transact-sql"
+      scope: punctuation.definition.comment.sql
+      push:
+        - meta_scope: comment.block.sql
+        - match: \*/
+          scope: punctuation.definition.comment.sql
+          pop: true
+        - include: block-comments
+  string_interpolation:
+    - match: '(#\{)([^\}]*)(\})'
+      scope: string.interpolated.sql
+      comment: This is PHP-specific, to capture interpolated parameters
+      captures:
+        1: punctuation.definition.string.begin.sql
+        3: punctuation.definition.string.end.sql
+  strings:
+    - match: "'"
+      captures:
+        0: punctuation.definition.string.begin.sql
+      push:
+        - meta_scope: string.quoted.single.sql
+        - match: "''"
+          scope: constant.character.escape.sql
+        - match: "'"
+          captures:
+            0: punctuation.definition.string.end.sql
+          pop: true
+    - match: "`"
+      captures:
+        0: punctuation.definition.string.begin.sql
+      push:
+        - meta_scope: string.quoted.other.backtick.sql
+        - match: "`"
+          captures:
+            0: punctuation.definition.string.end.sql
+          pop: true
+    - match: '(")[^"#]*(")'
+      comment: this is faster than the next begin/end rule since sub-pattern will match till end-of-line and SQL files tend to have very long lines.
+      scope: string.quoted.double.sql
+      captures:
+        1: punctuation.definition.string.begin.sql
+        3: punctuation.definition.string.end.sql
+    - match: '"'
+      captures:
+        0: punctuation.definition.string.begin.sql
+      push:
+        - meta_scope: string.quoted.double.sql
+        - match: '"'
+          captures:
+            0: punctuation.definition.string.end.sql
+          pop: true
+        - include: string_interpolation
+    - match: '%\{'
+      captures:
+        0: punctuation.definition.string.begin.sql
+      push:
+        - meta_scope: string.other.quoted.brackets.sql
+        - match: '\}'
+          captures:
+            0: punctuation.definition.string.end.sql
+          pop: true
+        - include: string_interpolation        

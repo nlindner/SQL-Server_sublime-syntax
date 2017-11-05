@@ -1,0 +1,538 @@
+%YAML 1.2
+---
+# http://www.sublimetext.com/docs/3/syntax.html
+name: SQL Server
+file_extensions:
+  - sql
+  - ddl
+  - dml
+scope: source.sqlserver
+variables:
+  object_name: '(?:\b|@|#{1,2}|_)?[\]\[_&#[:alpha:]][_&#.$@\[\][:alnum:]]*(?:\]|\b)'
+# object_name. Note that this should either begin with a word boundary OR other characters that are not recognized in a word boundary. See https://docs.microsoft.com/en-us/sql/relational-databases/databases/database-identifiers. Includes ampersand as a valid character so that this works with my SAS syntax
+# Other sources: 
+#   * https://github.com/sublimehq/Packages SQL: I started by comparing it to the other SQL Server-specific syntaxes, but limited the keywords to what is allowed by SQL Server
+#   * https://github.com/tosher/TSQLEasy
+#   * "Dridus/Transact-SQL.tmbundle": Used PackageDev to convert https://raw.githubusercontent.com/Dridus/Transact-SQL.tmbundle/master/Transact-SQL.tmLanguage
+contexts:
+  prototype:
+    - include: comments
+    - include: strings 
+    - include: regexps
+  main:
+    - include: comments
+    - include: strings
+    - include: commas
+    - include: keywords-control-of-flow
+    - include: keywords-control-of-flow-block
+    - include: case-when
+    - include: keywords-trx
+    - include: parameters-builtin
+    #- include: table_alias
+    - include: ddl-proc-or-function
+    - include: ddl-constraint
+    - include: keywords-other
+    - match: '^\s*(?i)(go)\s*(;\s*)?$'
+      scope: support.constant.go.other.sql
+    - match: '^\s*(?i)(use)\s+({{object_name}})\s*(;)?\s*$'
+      captures: 
+        1: keyword.other.use.sql
+        2: entity.name.database-name.sql
+        3: punctuation.terminator.sql
+    - match: '(?i)\s*\b(create)\s+(aggregate|database|login|rule|schema|sequence|table|trigger|type|user|view)\s+({{object_name}})'
+      scope: meta.create.sql
+      captures:
+        1: keyword.other.DML-create.sql
+        2: keyword.other.object-type.sql
+        3: entity.name.function.object.sql
+    - match: '(?i)\s*\b(create|alter|drop)\s+(unique\s+)?((?:non)?clustered\s+)?(index)\s+({{object_name}})'
+      scope: meta.index.sql
+      captures:
+        1: keyword.other.DML-operation.sql
+        2: keyword.other.index.option.unique.sql
+        3: keyword.other.index.option.cluster-type.sql
+        4: keyword.other.index.sql
+        5: entity.name.function.index.sql
+    - match: (?i)\s*\b(truncate)\s+(table)\s+({{object_name}})
+      scope: meta.truncate.sql
+      comment: Capture the object name for standard/simple statements
+      captures:
+        1: keyword.other.truncate.sql
+        2: keyword.other.objecttype.sql
+        3: variable.function.name.object.sql
+    - match: (?i)\s*\b(drop)\s+(aggregate|database|login|rule|schema|sequence|table|trigger|type|user|view)\s+({{object_name}})
+      scope: meta.drop.sql
+      comment: Capture the object name for standard/simple statements
+      captures:
+        1: keyword.other.drop.sql
+        2: keyword.other.objecttype.sql
+        3: variable.function.name.object.sql
+    - match: (?i)\s*\b(drop)\s+(aggregate|database|login|rule|schema|sequence|table|trigger|type|user|view|column)
+      scope: meta.drop.sql
+      comment: Capture anything missed by previous. Also add Column
+      captures:
+        1: keyword.other.create.sql
+        2: keyword.other.sql
+    - match: (?i)\s*(drop)\s+(table)\s+({{object_name}})(\s+cascade)?\b
+      scope: meta.drop.sql
+      captures:
+        1: keyword.other.create.sql
+        2: keyword.other.table.sql
+        3: entity.name.function.sql
+        4: keyword.other.cascade.sql
+    - match: (?i)\s*\b(alter)\s+(database|schema|table|trigger|view)\s+({{object_name}})
+      scope: meta.alter.sql
+      captures:
+        1: keyword.other.create.sql
+        2: keyword.other.table.sql
+        3: entity.name.function.sql
+    - match: (?i)\s*\b(alter)\s+(aggregate|database|login|rule|schema|sequence|table|trigger|type|user|view)\s+
+      scope: meta.alter.sql
+      captures:
+        1: keyword.other.create.sql
+        2: keyword.other.table.sql
+    - match: (?i)\s*\b(insert)\s+(into)\s+({{object_name}})
+      scope: meta.insert-into.sql
+      captures:
+        1: keyword.other.insert.sql
+        2: keyword.other.into.sql
+        3: entity.name.function.sql
+    - match: |-
+        (?xi)
+          # normal stuff, capture 1. Cursor is cover in other matches
+           (?:\[|\b)(bigint|bit|date|datetime|double\s+precision|geography|geometry|hierarchyid|int|integer|money|real|smallint|smalldate|smalldatetime|smallmoney|sql_variant|sysname|tinyint|time|uniqueidentifier|varbinary|xml)(?:\]|\b)
+          # numeric suffix, capture 2 + 3i
+          |(?:\[|\b)(binary|datetimeoffset|datetime2|dec|decimal|float|numeric|time|tinyint)(?:\]|\b)\((\d+)\)
+          # optional numeric suffix, capture 4 + 5i
+          |(?:\[|\b)(n?char|float|n?varchar)(?:\]|\b)(?:\((\d+|max)\))?
+          # special case, capture 6 + 7i + 8i
+          |(?:\[|\b)(numeric|decimal|dec)(?:\]|\b)(?:\((\d+),(\d+)\))?
+      # Changed all matches to check for EITHER word boundary or open/close square bracket around these because of how MSSQL generates scripts.
+      captures:
+        1: storage.type.sql
+        2: storage.type.sql
+        3: constant.numeric.sql
+        4: storage.type.sql
+        5: constant.numeric.sql
+        6: storage.type.sql
+        7: constant.numeric.sql
+        8: constant.numeric.sql
+    - match: (?i)(?:\[|\b)(ntext|text|image)(?:\((\d+))
+      scope: invalid.deprecated.storage.type.sql
+    - match: (?i)(?:\[|\b)(timestamp)\b
+      scope: invalid.deprecated.storage.type.sql
+      comment: This is deprecated and it also DOES NOT MEAN a timestamp, it's a rowversion, which is not cool.
+    - match: (?i)\b(primary\s+key)\b(\s+clustered)?
+      scope: storage.modifier.sql
+    - include: numbers
+    - match: (?i)\b((is\s+)?(not\s+)?null)\b
+      scope: keyword.other.nulls.sql
+    - match: (?i)\b(in|not|and|or|like|between)\b
+      scope: keyword.operator.word.sql
+    - match: (?i)\b(on)\b
+      scope: keyword.other.on.sql
+    - match: '(?i)\b((inner|cross)\s+join|(outer|cross)\s+apply|(left|right|full)(\s+outer)?\s+join|natural(\s+(left|right)(\s+outer)?)?\s+join)\b'
+      scope: keyword.other.join.sql
+      comment: Might be missing some things, see "https://docs.microsoft.com/en-us/sql/t-sql/queries/from-transact-sql"
+    - match: '(?i)\b(select(\s+distinct)?)(\s+top)?\b'
+      scope: keyword.other.select.sql
+    - match: '(?i)\b(insert\s+(ignore\s+)?into|insert|update|with|delete|from|join|print|declare|open|close|fetch|deallocate|cursor|is|exec|execute|where|group\s+by|exists|union(\s+all)?|having|order\s+by|partition\s+by)\b'
+      scope: keyword.other.DML.misc.sql
+      comment: consume these (including simple from/join keywords) after first consuming the "complex" patterns 
+    - match: '(?i)\b(?<!%)(for|while)\b'
+      scope: keyword.control.other.sql
+      comment: SAS-specific logic to prevent macro control keywords from being consumed by SQL keywords
+    - match: '(?i)\b(into)\s+({{object_name}})'
+      captures:
+        1: keyword.other.into.sql
+        2: entity.name.function.object.sql
+    - match: (?i)\bvalues\b
+      scope: keyword.other.DML.values.sql
+    - match: (?i)\bset\s+(datefirst|dateformat|deadlock_priority|lock_timeout|concat_null_yields_null|cursor_close_on_commit|fips_flagger|identity_insert|language|offsets|quoted_identifier|arithabort|arithignore|fmtonly|nocount|noexec|numeric_roundabort|parseonly|query_governor_cost_limit|rowcount|textsize|ansi_defaults|ansi_null_dflt_off|ansi_null_dflt_on|ansi_nulls|ansi_padding|ansi_warnings|forceplan|showplan_all|showplan_text|showplan_xml|statistics\s+(io|xml|profile|time)|implicit_transactions|remote_proc_transactions|transaction isolation level|xact_abort)\b
+      scope: keyword.other.setstatement.sql
+      comment: "Set statements: https://msdn.microsoft.com/en-us/library/ms190356.aspx"
+    - match: (?i)\b(dbcc)\s+(CHECKALLOC|CHECKCATALOG|CHECKTABLE|TABLE\s+CHECK|TABLE\s+REPAIR|ALLOC\s+CHECK|ALLOC\s+REPAIR|SYS\s+CHECK|SYS\s+REPAIR|SSB\s+CHECK|IVIEW\s+CHECK|INPUTBUFFER|SHOWCONTIG|OPENTRAN|SQLPERF|OUTPUTBUFFER|TRACESTATUS|PROCCACHE|USEROPTIONS|SHOW_STATISTICS|CHECKALLOC|CHECKFILEGROUP|CHECKCATALOG|CHECKIDENT|CHECKCONSTRAINTS|CHECKTABLE|CHECKDB|CLEANTABLE|INDEXDEFRAG|DBREINDEX|SHRINKDATABASE|DROPCLEANBUFFERS|SHRINKFILE|FREEPROCCACHE|UPDATEUSAGE|dllname|HELP|FREESESSIONCACHE|TRACEOFF|FREESYSTEMCACHE|TRACEON|CLONEDATABASE)\b
+      scope: keyword.other.dbcc.sql
+      comment: "DBCC: https://msdn.microsoft.com/en-us/library/ms188796.aspx"
+    - match: (?i)\b(set)\b
+      scope: keyword.other.DML.set.sql
+      comment: Move this below keyword.other.setstatement.sql to capture set statements first
+    - match: (?i)\b(sp_column_privileges|sp_special_columns|sp_columns|sp_sproc_columns|sp_databases|sp_statistics|sp_fkeys|sp_stored_procedures|sp_pkeys|sp_table_privileges|sp_server_info|sp_tables|sp_cursor_list|sp_cursorprepare|sp_cursor|sp_cursorprepexec|sp_cursorclose|sp_cursorunprepare|sp_cursorexecute|sp_describe_cursor|sp_cursorfetch|sp_describe_cursor_columns|sp_cursoropen|sp_describe_cursor_tables|sp_cursoroption|sp_syscollector_create_collection_item|sp_syscollector_set_cache_window|sp_syscollector_create_collection_set|sp_syscollector_set_warehouse_database_name|sp_syscollector_create_collector_type|sp_syscollector_set_warehouse_instance_name|sp_syscollector_delete_collection_item|sp_syscollector_start_collection_set|sp_syscollector_delete_collection_set|sp_syscollector_stop_collection_set|sp_syscollector_delete_collector_type|sp_syscollector_run_collection_set|sp_syscollector_delete_execution_log_tree|sp_syscollector_update_collection_item|sp_syscollector_disable_collector|sp_syscollector_update_collection_set|sp_syscollector_enable_collector|sp_syscollector_update_collector_type|sp_syscollector_set_cache_directory|sp_syscollector_upload_collection_set|sp_add_data_file_recover_suspect_db|sp_execute|sp_add_log_file_recover_suspect_db|sp_executesql|sp_addextendedproc|sp_getapplock|sp_addextendedproperty|sp_getbindtoken|sp_addmessage|sp_help|sp_addtype|sp_helpconstraint|sp_addumpdevice|sp_helpdb|sp_altermessage|sp_helpdevice|sp_attach_db|sp_helpextendedproc|sp_attach_single_file_db|sp_helpfile|sp_autostats|sp_helpfilegroup|sp_bindefault|sp_helpindex|sp_bindrule|sp_helplanguage|sp_bindsession|sp_helpserver|sp_certify_removable|sp_helpsort|sp_clean_db_file_free_space|sp_helpstats|sp_clean_db_free_space|sp_helptext|sp_configure|sp_helptrigger|sp_control_plan_guide|sp_indexoption|sp_create_plan_guide|sp_invalidate_textptr|sp_create_plan_guide_from_handle|sp_lock|sp_create_removable|sp_monitor|sp_createstats|sp_prepare|sp_cycle_errorlog|sp_prepexec|sp_datatype_info|sp_prepexecrpc|sp_db_increased_partitions|sp_procoption|sp_dbcmptlevel|sp_recompile|sp_dbmmonitoraddmonitoring|sp_refreshview|sp_dbmmonitorchangealert|sp_releaseapplock|sp_dbmmonitorchangemonitoring|sp_rename|sp_dbmmonitordropalert|sp_renamedb|sp_dbmmonitordropmonitoring|sp_resetstatus|sp_dbmmonitorhelpalert|sp_sequence_get_range|sp_dbmmonitorhelpmonitoring|sp_serveroption|sp_dbmmonitorresults|sp_setnetname|sp_delete_backuphistory|sp_settriggerorder|sp_depends|sp_spaceused|sp_describe_first_result_set|sp_tableoption|sp_describe_undeclared_parameters|sp_unbindefault|sp_detach_db|sp_unbindrule|sp_dropdevice|sp_updateextendedproperty|sp_dropextendedproc|sp_updatestats|sp_dropextendedproperty|sp_unprepare|sp_dropmessage|sp_validname|sp_droptype|sp_who|sp_send_dbmail|sysmail_help_configure_sp|sysmail_add_account_sp|sysmail_help_principalprofile_sp|sysmail_add_principalprofile_sp|sysmail_help_profile_sp|sysmail_add_profile_sp|sysmail_help_profileaccount_sp|sysmail_add_profileaccount_sp|sysmail_help_queue_sp|sysmail_configure_sp|sysmail_help_status_sp|sysmail_delete_account_sp|sysmail_start_sp|sysmail_delete_log_sp|sysmail_stop_sp|sysmail_delete_mailitems_sp|sysmail_update_account_sp|sysmail_delete_principalprofile_sp|sysmail_update_principalprofile_sp|sysmail_delete_profile_sp|sysmail_update_profile_sp|sysmail_delete_profileaccount_sp|sysmail_update_profileaccount_sp|sysmail_help_account_sp|sp_add_maintenance_plan|sp_delete_maintenance_plan_db|sp_add_maintenance_plan_db|sp_delete_maintenance_plan_job|sp_add_maintenance_plan_job|sp_help_maintenance_plan|sp_delete_maintenance_plan|sp_addlinkedserver|sp_indexes|sp_addlinkedsrvlogin|sp_linkedservers|sp_catalogs|sp_primarykeys|sp_column_privileges_ex|sp_serveroption|sp_columns_ex|sp_table_privileges_ex|sp_droplinkedsrvlogin|sp_tables_ex|sp_dropserver|sp_testlinkedserver|sp_foreignkeys|sp_filestream_force_garbage_collection|sp_kill_filestream_non_transacted_handles|sp_fulltext_catalog|sp_fulltext_column|sp_fulltext_database|sp_fulltext_keymappings|sp_fulltext_load_thesaurus_file|sp_fulltext_pendingchanges|sp_fulltext_service|sp_fulltext_table|sp_help_fulltext_catalog_components|sp_help_fulltext_catalogs|sp_help_fulltext_catalogs_cursor|sp_help_fulltext_columns|sp_help_fulltext_columns_cursor|sp_help_fulltext_system_components|sp_help_fulltext_tables|sp_help_fulltext_tables_cursor|sp_fulltext_semantic_register_language_statistics_db|sp_fulltext_semantic_unregister_language_statistics_db|xp_cmdshell|xp_logininfo|xp_enumgroups|xp_msver|xp_grantlogin|xp_revokelogin|xp_logevent|xp_sprintf|xp_loginconfig|xp_sqlmaint|xp_sscanf|sp_add_log_shipping_alert_job|sp_delete_log_shipping_secondary_database|sp_add_log_shipping_primary_database|sp_delete_log_shipping_secondary_primary|sp_add_log_shipping_primary_secondary|sp_help_log_shipping_alert_job|sp_add_log_shipping_secondary_database|sp_help_log_shipping_monitor|sp_add_log_shipping_secondary_primary|sp_help_log_shipping_monitor_primary|sp_change_log_shipping_primary_database|sp_help_log_shipping_monitor_secondary|sp_change_log_shipping_secondary_database|sp_help_log_shipping_primary_database|sp_change_log_shipping_secondary_primary|sp_help_log_shipping_primary_secondary|sp_cleanup_log_shipping_history|sp_help_log_shipping_secondary_database|sp_delete_log_shipping_alert_job|sp_help_log_shipping_secondary_primary|sp_delete_log_shipping_primary_database|sp_refresh_log_shipping_monitor|sp_delete_log_shipping_primary_secondary|sp_OACreate|sp_OAMethod|sp_OADestroy|sp_OASetProperty|sp_OAGetErrorInfo|sp_OAStop|sp_OAGetProperty|sp_syspolicy_add_policy_category|sp_syspolicy_rename_policy_category|sp_syspolicy_add_policy_category_subscription|sp_syspolicy_repair_policy_automation|sp_syspolicy_configure|sp_syspolicy_set_config_enabled|sp_syspolicy_delete_policy_category|sp_syspolicy_set_config_history_retention|sp_syspolicy_delete_policy_category_subscription|sp_syspolicy_set_log_on_success|sp_syspolicy_delete_policy_execution_history|sp_syspolicy_subscribe_to_policy_category|sp_syspolicy_purge_health_state|sp_syspolicy_unsubscribe_from_policy_category|sp_syspolicy_purge_history|sp_syspolicy_update_policy_category|sp_syspolicy_rename_condition|sp_syspolicy_update_policy_category_subscription|sp_syspolicy_rename_policy|sp_addapprole|sp_dropserver|sp_addlinkedsrvlogin|sp_dropsrvrolemember|sp_addlogin|sp_dropuser|sp_addremotelogin|sp_grantdbaccess|sp_addrole|sp_grantlogin|sp_addrolemember|sp_helpdbfixedrole|sp_addserver|sp_helplinkedsrvlogin|sp_addsrvrolemember|sp_helplogins|sp_adduser|sp_helpntgroup|sp_approlepassword|sp_helpremotelogin|sp_audit_write|sp_helprole|sp_changedbowner|sp_helprolemember|sp_changeobjectowner|sp_helprotect|sp_change_users_login|sp_helpsrvrole|sp_dbfixedrolepermission|sp_helpsrvrolemember|sp_defaultdb|sp_helpuser|sp_defaultlanguage|sp_migrate_user_to_contained|sp_denylogin|sp_MShasdbaccess|sp_dropalias|sp_password|sp_dropapprole|sp_remoteoption|sp_droplinkedsrvlogin|sp_revokedbaccess|sp_droplogin|sp_revokelogin|sp_dropremotelogin|sp_setapprole|sp_droprole|sp_srvrolepermission|sp_droprolemember|sp_validatelogins|sp_help_spatial_geometry_index|sp_help_spatial_geography_index|sp_help_spatial_geometry_index_xml|sp_help_spatial_geography_index_xml|sp_add_alert|sp_help_jobactivity|sp_add_category|sp_help_jobcount|sp_add_job|sp_help_jobhistory|sp_add_jobschedule|sp_help_jobs_in_schedule|sp_add_jobserver|sp_help_jobschedule|sp_add_jobstep|sp_help_jobserver|sp_add_notification|sp_help_jobstep|sp_add_operator|sp_help_jobsteplog|sp_add_schedule|sp_help_notification|sp_add_targetservergroup|sp_help_operator|sp_add_targetsvrgrp_member|sp_help_proxy|sp_apply_job_to_targets|sp_help_schedule|sp_attach_schedule|sp_help_targetserver|sp_cycle_agent_errorlog|sp_help_targetservergroup|sp_cycle_errorlog|sp_manage_jobs_by_login|sp_delete_alert|sp_msx_defect|sp_delete_category|sp_msx_enlist|sp_delete_job|sp_msx_get_account|sp_delete_jobschedule|sp_msx_set_account|sp_delete_jobserver|sp_notify_operator|sp_delete_jobstep|sp_post_msx_operation|sp_delete_jobsteplog|sp_purge_jobhistory|sp_delete_notification|sp_remove_job_from_targetss|sp_delete_operator|sp_resync_targetserver|sp_delete_proxy|sp_revoke_login_from_proxy|sp_delete_schedule|sp_revoke_proxy_from_subsystem|sp_delete_targetserver|sp_start_job|sp_delete_targetservergroup|sp_stop_job|sp_delete_targetsvrgrp_member|sp_update_alert|sp_detach_schedule|sp_update_category|sp_enum_login_for_proxy|sp_update_job|sp_enum_proxy_for_subsystem|sp_update_jobschedule|sp_enum_sqlagent_subsystems|sp_update_jobstep|sp_grant_proxy_to_subsystem|sp_update_notification|sp_grant_login_to_proxy|sp_update_operator|sp_help_alert|sp_update_proxy|sp_help_category|sp_update_schedule|sp_help_downloadlist|sp_update_targetservergroup|sp_help_job|sp_trace_create|sp_trace_setfilter|sp_trace_generateevent|sp_trace_setstatus|sp_trace_setevent|sp_xml_preparedocument|sp_xml_removedocument|sp_db_selective_xml_index|xml\.modify|xml\.query|xml\.value|xml\.exist|xml\.nodes)\b
+      scope: support.function.sql
+      comment: "From WBond/Packages/SQL. See System stored procedures: https://msdn.microsoft.com/en-us/library/ms187961.aspx"
+    - match: (?i)\b(grant(\swith\sgrant\soption)?|revoke)\b
+      scope: keyword.other.authorization.sql
+    - match: (?i)\bin\b
+      scope: keyword.other.data-integrity.sql
+    - match: (?i)\s*\b(comment\s+on\s+(table|column|aggregate|constraint|database|domain|function|index|operator|rule|schema|sequence|trigger|type|view))\s+.*?\s+(is)\s+
+      scope: keyword.other.object-comments.sql
+    - match: (?i)\bAS\b
+      scope: keyword.other.as.sql
+    - match: (?i)\b(DESC|ASC)\b
+      scope: keyword.other.order.sql
+    - match: \*
+      scope: keyword.operator.star.sql
+    - match: "[!<>]?=|<>|<|>"
+      scope: keyword.operator.comparison.sql
+    - match: '-|\+|/'
+      scope: keyword.operator.arithmetic.sql
+    - match: \|\|
+      scope: keyword.operator.concatenator.sql
+    - match: (?i)\b(opendatasource|openrowset|openquery|openxml)\b
+      comment: "Rowset functions: https://msdn.microsoft.com/en-us/library/ms187957.aspx"
+      scope: support.function.rowset.sql
+    - match: (?i)\b(avg|min|checksum_agg|sum|count|stdev|count_big|stdevp|grouping|var|grouping_id|varp|max)\b
+      comment: "Aggregate Functions: https://msdn.microsoft.com/en-us/library/ms173454.aspx"
+      scope: support.function.aggr.sql
+    - match: (?i)\b(rank|ntile|dense_rank|row_number)\b
+      comment: "Ranking Functions: https://msdn.microsoft.com/en-us/library/ms189798.aspx"
+      scope: support.function.ranking.sql
+    - match: (?i)\b(cume_dist|first_value|lag|last_value|lead|percentile_cont|percentil_disc|percent_rank)\b
+      comment: "Analytic Functions: https://docs.microsoft.com/en-us/sql/t-sql/functions/analytic-functions-transact-sql"
+      scope: support.function.analytic.sql
+    - match: (?i)\b(|current\s+row|over|pivot|rows|range|unbounded|preceding|following|unpivot)\b
+      scope: keyword.other.over-olap.sql
+    - match: (?i)\b(cast|convert|parse|try_cast|try_convert|try_parse)\b
+      comment: "Conversion Functions: https://msdn.microsoft.com/en-us/library/hh231076.aspx"
+      scope: support.function.rowset.sql
+    - match: (?i)\b(dateadd|datepart|datename|datediff)\(\s*(year|yy|yyyy|quarter|qq|month|mm|dayofyear|dy|day|dd|week|wk|ww|weekday|dw|hour|hh|minute|mi|second|ss|millisecond|ms|microsecond|mcs|nanosecond|ns|TZoffset|tz|iso_week|isowk|isoww)\b
+      comment: "Datepart keywords (excluding the single-letter abbreviations q, m, y, d, n, s): https://msdn.microsoft.com/en-us/library/ms174420.aspx"
+      scope: support.function.datepart.sql
+    - match: (?i)\b(sysdatetime|sysdatetimeoffset|sysutcdatetime|current_timestamp|getdate|getutcdate|datename|datepart|day|month|year|datefromparts|datetime2fromparts|datetimefromparts|datetimeoffsetfromparts|smalldatetimefromparts|timefromparts|datediff|dateadd|eomonth|switchoffset|todatetimeoffset|isdate)\b
+      comment: "Date and time Functions: https://msdn.microsoft.com/en-us/library/ms186724.aspx"
+      scope: support.function.datetime.sql
+    - match: (?i)\b(choose|iif)\b
+      comment: "Logical Functions: https://msdn.microsoft.com/en-us/library/hh213226.aspx"
+      scope: support.function.logical.sql
+    - match: (?i)\b(abs|degrees|rand|acos|exp|round|asin|floor|sign|atan|log|sin|atn2|log10|sqrt|ceiling|pi|square|cos|power|tan|cot|radians)\b
+      comment: "Mathematical Functions: https://msdn.microsoft.com/en-us/library/ms177516.aspx"
+      scope: support.function.math.sql
+    - match: (?i)\b(index_col|app_name|indexkey_property|applock_mode|indexproperty|applock_test|next value for|assemblyproperty|object_definition|col_length|object_id|col_name|object_name|columnproperty|object_schema_name|database_principal_id|objectproperty|databasepropertyex|objectpropertyex|db_id|original_db_name|db_name|parsename|file_id|schema_id|file_idex|schema_name|file_name|scope_identity|filegroup_id|serverproperty|filegroup_name|stats_date|filegroupproperty|type_id|fileproperty|type_name|fulltextcatalogproperty|typeproperty|fulltextserviceproperty)\b
+      comment: "Metadata Functions: https://msdn.microsoft.com/en-us/library/ms187812.aspx"
+      scope: support.function.metadata.sql
+    - match: (?i)\b(certencoded|pwdcompare|certprivatekey|pwdencrypt|current_user|schema_id|database_principal_id|schema_name|session_user|suser_id|suser_sid|has_perms_by_name|suser_sname|is_member|system_user|is_rolemember|suser_name|is_srvrolemember|user_id|original_login|user_name|permissions)\b
+      comment: "Security Functions: https://msdn.microsoft.com/en-us/library/ms186236.aspx"
+      scope: support.function.security.sql
+    - match: (?i)\b(?<!%)(ascii|char|charindex|concat|concat_ws|difference|format|left|len|lower|ltrim|nchar|patindex|quotename|replace|replicate|reverse|right|rtrim|soundex|space|str|string_agg|string_escape|string_split|stuff|substring|translate|unicode|upper)\b\s*(?:\()
+      comment: "SAS-specific logic to exclude sas macro (percent prefix) String Functions: https://msdn.microsoft.com/en-us/library/ms181984.aspx"
+      scope: support.function.string.sql
+    - match: (?i)\b(coalesce|nullif|isnull|isnumeric)\b\s*(?:\()
+      scope: support.function.other.sql
+    - match: (?i)\$\b(partition)|\b(error_severity|error_state|formatmessage|getansinull|get_filestream_transaction_context|host_id|binary_checksum|host_name|checksum|connectionproperty|context_info|min_active_rowversion|current_request_id|newid|error_line|newsequentialid|error_message|rowcount_big|error_number|xact_state|error_procedure)\b
+      comment: "System Functions: https://msdn.microsoft.com/en-us/library/ms187786.aspx"
+      scope: support.function.system.sql
+    - match: (?i)\b(patindex|textvalid|textptr)\b
+      comment: "Text and image Functions: https://msdn.microsoft.com/en-us/library/ms188353.aspx"
+      scope: support.function.textandimage.sql
+    - match: (?i)\b(ABSOLUTE|ACTION|ADA|ALLOCATE|ARE|ASSERTION|AT|BIT_LENGTH|BOTH|CASCADED|CHAR_LENGTH|CHARACTER_LENGTH|COLLATION|CONNECT|DEFERRABLE|DEFERRED|DESCRIBE|DESCRIPTOR|DIAGNOSTICS|END-EXEC|EXTRACT|FIRST|FORTRAN|FOUND|GET|GLOBAL|IMMEDIATE|INCLUDE|INDICATOR|INITIALLY|INSENSITIVE|LAST|LEADING|LOCAL|MATCH|MODULE|NAMES|NEXT|NO|NONE|OCTET_LENGTH|ONLY|OUTPUT|OVERLAPS|PAD|PARTIAL|PASCAL|POSITION|PREPARE|PRESERVE|PRIOR|PRIVILEGES|RELATIVE|ROWS|SCROLL|SECTION|SESSION|SQLCA|SQLCODE|SQLERROR|SQLSTATE|SQLWARNING|TEMPORARY|TIMEZONE_HOUR|TIMEZONE_MINUTE|TRAILING|TRANSLATE|TRANSLATION|UNKNOWN|USAGE|USING|WHENEVER|ZONE|FALSE|TRUE)\b
+      scope: support.function.reserved.odbc.sql
+      comment: "ODBC Reserved Keywords: https://msdn.microsoft.com/en-us/library/ms189822.aspx (not already captured in this syntax) 2017.06.25 removed CONNECTION|CORRESPONDING|DISCONNECT"
+    - match: (?i)[^%]\b(all|any|authorization|backup|browse|bulk|check|checkpoint|coalesce|collate|column|commit|compute|containstable|cross|default|deny|disk|distinct|distributed|dump|errlvl|escape|except|exit|external|file|fillfactor|freetext|freetexttable|function|grant|holdlock|identity|identitycol|intersect|lineno|load|merge|national|nocheck|nonclustered|nullif|of|off|option|percent|plan|precision|public|read|readtext|reconfigure|replication|restore|restrict|revert|revoke|rowguidcol|securityaudit|semantickeyphrasetable|semanticsimilaritydetailstable|semanticsimilaritytable|setuser|shutdown|some|tablesample|truncate|tsequal|updatetext|within group|writetext)\b
+      scope: keyword.other.reserved.sql
+      comment: "Reserved keywords, per https://msdn.microsoft.com/en-us/library/ms189822.aspx, after removing any keywords already captured by other match patterns"
+      # Excluding \b(left)\b
+    - include: strings
+    - include: regexps
+    - match: (\()(\))\.
+      comment: Allow for special ↩ behavior
+      scope: meta.block.sql
+      captures:
+        1: punctuation.section.scope.begin.sql
+        2: punctuation.section.scope.end.sql
+  commas:
+    - match: ','
+      scope: punctuation.separator.sql
+  block-comments:
+    - match: /\*
+      comment: " Fixed bug comment.block where was named comment.block.c. Nested block comments are legal per https://docs.microsoft.com/en-us/sql/t-sql/language-elements/slash-star-comment-transact-sql"
+      scope: punctuation.definition.comment.sql
+      push:
+        - meta_scope: comment.block.sql
+        - match: \*/
+          scope: punctuation.definition.comment.sql
+          pop: true
+        - include: block-comments    
+  comments:
+    - include: block-comments
+    - match: '--'
+      scope: punctuation.definition.comment.sql
+      push:
+        - meta_scope: comment.line.double-dash.sql
+        - match: '$\n?'
+          pop: true
+  label_goto:
+    - match: (?<=goto)\s+(\w+)
+      comment: goto Label
+      captures:
+        1: entity.name.label.goto.sql
+  regexps:
+    - match: /(?=\S.*/)
+      captures:
+        0: punctuation.definition.string.begin.sql
+      push:
+        - meta_scope: string.regexp.sql
+        - match: /
+          captures:
+            0: punctuation.definition.string.end.sql
+          pop: true
+        - include: string_interpolation
+        - match: \\/
+          scope: constant.character.escape.sql
+    - match: '%r\{'
+      comment: We should probably handle nested bracket pairs!?! -- Allan
+      captures:
+        0: punctuation.definition.string.begin.sql
+      push:
+        - meta_scope: string.regexp.modr.sql
+        - match: '\}'
+          captures:
+            0: punctuation.definition.string.end.sql
+          pop: true
+        - include: string_interpolation
+  string_interpolation:
+    - match: '(#\{)([^\}]*)(\})'
+      scope: string.interpolated.sql
+      comment: This is PHP-specific, to capture interpolated parameters
+      captures:
+        1: punctuation.definition.string.begin.sql
+        3: punctuation.definition.string.end.sql
+  strings:
+    - match: "'"
+      captures:
+        0: punctuation.definition.string.begin.sql
+      push:
+        - meta_scope: string.quoted.single.sql
+        - match: "''"
+          scope: constant.character.escape.sql
+        - match: "'"
+          captures:
+            0: punctuation.definition.string.end.sql
+          pop: true
+    - match: "`"
+      captures:
+        0: punctuation.definition.string.begin.sql
+      push:
+        - meta_scope: string.quoted.other.backtick.sql
+        - match: "`"
+          captures:
+            0: punctuation.definition.string.end.sql
+          pop: true
+    - match: '(")[^"#]*(")'
+      comment: this is faster than the next begin/end rule since sub-pattern will match till end-of-line and SQL files tend to have very long lines.
+      scope: string.quoted.double.sql
+      captures:
+        1: punctuation.definition.string.begin.sql
+        3: punctuation.definition.string.end.sql
+    - match: '"'
+      captures:
+        0: punctuation.definition.string.begin.sql
+      push:
+        - meta_scope: string.quoted.double.sql
+        - match: '"'
+          captures:
+            0: punctuation.definition.string.end.sql
+          pop: true
+        - include: string_interpolation
+    - match: '%\{'
+      captures:
+        0: punctuation.definition.string.begin.sql
+      push:
+        - meta_scope: string.other.quoted.brackets.sql
+        - match: '\}'
+          captures:
+            0: punctuation.definition.string.end.sql
+          pop: true
+        - include: string_interpolation
+  table_alias:
+    - match: (?i)\b(?:from|join)\s+
+      scope: keyword.other.join.sql      
+      comment: Changed this from TSQLEasy. New Sublime Text regex engine doesnt allow lookbehind
+      push:
+        - meta_scope: meta.alias.sql
+        - match: (?i)(?=\n|,|\s|with|outer|inner|left|right|cross|where|join|on)
+          pop: true
+        - match: '(?i)({{object_name}})\s+(as\s)?(?!=\n|,|\s|with|outer|inner|left|right|cross|where|join|on)(\w+)'
+          captures:
+            1: variable.function.name.object.sql
+            2: keyword.other.as.sql
+            3: variable.function.name.table-alias.sql
+          pop: true
+        - match: '(?i)({{object_name}})\b'
+          scope: variable.function.name.object.sql
+        - include: comments
+  numbers:
+    - match: '\b([0-9]+(?:\.[0-9]+)?(?:[eE][+\-]?[0-9]+)?)\b'
+      scope: constant.numeric.sql
+      comment: Per https://docs.microsoft.com/en-us/sql/t-sql/data-types/constants-transact-sql
+  case-when:
+    - match: (?i)\b(?<!%)(case)\b
+      scope: keyword.control.case.bgn.sql
+      push:
+        #- meta_scope: meta.case-when.sql
+        - match: (?i)\b(?<!%)(end)\b
+          scope: keyword.control.case.end.sql
+          pop: true
+        - match: (?i)\b(?<!%)(when|then|else)\b
+          scope: keyword.control.case.within.sql
+        - include: main
+  keywords-control-of-flow-block:
+    # Location: Do this after case-when and keywords-trx
+    # NLindner added not-percent-sign condition because of SAS control keywords.
+    # Per ANTLR: block_statement try_catch_statement transaction_statement
+    # Also roughly per ANTLR: func_body_returns_select func_body_returns_table func_body_returns_scalar
+    - include: case-when
+    - include: keywords-trx
+    - match: (?i)\b(?<!%)(begin)\b
+      comment: "Control-of-flow keywords: https://msdn.microsoft.com/en-us//library/ms174290.aspx"
+      scope: keyword.control.block.bgn.sql
+      push:
+        - meta_scope: meta.block.begin-end.sql
+        - match: (?i)\b(?<!%)(end)\b
+          scope: keyword.control.block.end.sql
+          pop: true
+        - include: keywords-control-of-flow
+        - include: main
+  keywords-control-of-flow:
+    # TODO (if possible?): Only include these in certain statement-types, instead of allowing them to be highlighted anywhere
+    - match: '(?i)\b(?<!%)(return|break|throw|continue|goto|if|else|while)\b'
+      comment: "NLindner added not-percent-sign because of SAS: Control-of-flow keywords: https://msdn.microsoft.com/en-us//library/ms174290.aspx"
+      scope: keyword.control.of-flow.sql
+    - match: (?i)\b(WAITFOR)\b(\s+(delay|time|timeout)\b)?
+      captures:
+        1: keyword.other.trx.waitfor.sql
+        2: keyword.other.trx.waitfor.interval.sql
+  keywords-trx:
+    # WAS keyword.other.LUW.sql in SublimeHQ package
+    # Per ANTLR: block_statement try_catch_statement transaction_statement
+    - match: (?i)\b(?<!%)(begin|end)\s+(try|catch)\b
+      scope: keyword.control.transaction.trycatch.sql
+    - match: (?i)\b(?<!%)(begin|commit|rollback)\s+(tran(?:saction)?|work)\b
+      scope: keyword.control.transaction.sql
+    - match: (?i)\b(?<!%)(begin)\s+(distributed)\s+(tran(?:saction)?)\b
+      scope: keyword.control.transaction.distributed.sql
+    - match: (?i)\b(?<!%)(save)\s+(tran(?:saction)?)\b
+      scope: keyword.control.transaction.save.sql
+  keywords-other:
+    - match: (?i)\b(print|raiserror)\b
+      scope: keyword.other.print.sql
+  statement-closeparen-pop:
+    - match: (?=\))
+      pop: true
+  statement-openorcloseparen-pop:
+    - match: (?=\)|\()
+      pop: true
+  parameters-builtin:
+    - match: (?i)@@\b(datefirst|options|dbts|remserver|langid|servername|language|servicename|lock_timeout|spid|max_connections|textsize|max_precision|version|nestlevel)\b
+      scope: constant.language.global.config.sql
+      comment: "Configuration Functions: https://msdn.microsoft.com/en-us/library/ms173823.aspx"
+    - match: (?i)(@@\b(cursor_rows|fetch_status)|cursor_status)\b
+      comment: "Cursor Functions: https://msdn.microsoft.com/en-us/library/ms186285.aspx"
+      scope: constant.language.global.cursor.sql
+    - match: (?i)@@\b(procid)\b
+      comment: "Metadata Functions: https://msdn.microsoft.com/en-us/library/ms187812.aspx"
+      scope: constant.language.global.metadata.sql
+    - match: (?i)@@\b(error|identity|pack_received|rowcount|trancount)\b
+      comment: "System Functions: https://msdn.microsoft.com/en-us/library/ms187786.aspx"
+      scope: constant.language.global.system.sql
+    - match: (?i)@@\b(connections|pack_received|cpu_busy|pack_sent|timeticks|idle|total_errors|io_busy|total_read|packet_errors|total_write)\b
+      comment: "System Statistical Functions: https://msdn.microsoft.com/en-us/library/ms177520.aspx"
+      scope: constant.language.global.system-stats.sql
+    - match: (?i)@@\b(datefirst|language)\b
+      comment: "Date and time Functions: https://msdn.microsoft.com/en-us/library/ms186724.aspx"
+      scope: constant.language.global.datetime.sql
+    - match: '(?:[^@[:word:]])(@\w+\b)|(?:[^@[:word:]])(@@\w+\b)'
+      captures:
+        1: variable.other.parameter.sql
+        2: constant.language.global.sql
+  parameter_declarations:
+    - include: comments
+      comment: From Dridus/Transact-SQL.tmbundle. Scope names aligned with SublimeText documentation
+    #This captures too much and then makes it unavailable to other captures- match: \s*(,|^)\s*
+    #  scope: punctuation.separator.sql
+    - match: |-
+        (?xi)
+            (@[_a-zA-Z][#$@_a-zA-Z0-9]*)  # capture 1. identifier
+            \s+
+            ([_a-zA-Z][#$@_a-zA-Z0-9]*)   # capture 2. data type
+            (?:\s*(\()([^)]+)(\)))?       # capture 3-5. optional data type argument, which is assumed to be numeric
+            (?:\s*(output))?              # capture 6. when used in a SP declaration the word output is legal here
+      captures:
+        1: variable.parameter.sql
+        2: storage.type.sql
+        3: punctuation.section.group.begin.sql
+        4: constant.numeric.sql
+        5: punctuation.section.group.end.sql
+        6: keyword.other.sql
+  go-pop:
+    - match: '^\s*(?im)(go)\s*(;\s*)?$'
+      captures:
+        1: support.constant.go.sql
+        2: punctuation.terminator.sql
+      pop: true
+  ddl-constraint:
+    - match: (?im)(add|drop|alter)?\s*\b(constraint)[[:space:]]+({{object_name}}(?:[[:space:]]+))?(((primary\s+key|unique)\s+((?:non)?clustered\b)?)|default\b|check\b|(foreign\s+key))
+      captures:
+        1: keyword.other.DDL-operation.sql
+        2: keyword.other.object-type.sql
+        3: variable.function.name.object.sql
+        4: keyword.other.constraint.sql
+    - match: (?i)((?:primary|foreign)\s+key|unique)\s+((?:non)?clustered\b)?
+      scope: keyword.other.constraint.option.sql
+      comment: Capture these when they are on a new line after the constraint *sigh*
+    - match: (?i)\b(references)\s+({{object_name}})
+      captures: 
+        1: keyword.other.constraint.references.sql
+        2: variable.function.name.object.sql
+    - match: (?i)\b(on\s+(delete|update)\s+(no\s+action|cascade|set\s+null|set\s+default)?)
+      scope: keyword.other.constraint.action.sql
+    - match: (?im)(add|drop|alter)?\s*\b(constraint)[[:space:]]+({{object_name}})
+      comment: Capture anything missed previously
+      captures:
+        1: keyword.other.DDL-operation.sql
+        2: keyword.other.object-type.sql
+        3: variable.function.name.object.sql
+  ddl-proc-or-function:
+    # comment: Adapted from Dridus/Transact-SQL.tmbundle. Scope names aligned with SublimeText documentation
+    - match: (?i)\b(drop)\s+(proc(?:edure)?|function)\s+({{object_name}})
+      scope: meta.drop.proc-or-function.sql
+      captures:
+        1: keyword.other.DDL-operation.sql
+        2: keyword.other.object-type.sql
+        3: variable.function.name.object.sql
+      push:
+        - match: '$\n?'
+          pop: true
+          comment: Pop at the new line, for lack of better way of capturing the end of this statement.
+        - match: \s*(,)\s*({{object_name}})
+          comment: Multiple functions can be dropped at the same time. This will only capture multiple dropped function names if they are on the same line as the "drop function"
+          captures: 
+            1: punctuation.separator.sql
+            2: variable.function.name.object.sql
+    - match: (?i)\b(create|alter)\s+(proc(?:edure)?|function)\s+({{object_name}})
+      captures:
+        1: keyword.other.DDL-operation.sql
+        2: keyword.other.object-type.sql
+        3: entity.name.function.proc-or-function.sql
+      push:
+        - meta_scope: meta.function.create-or-alter.sql
+        - include: go-pop
+        - include: comments
+        - include: parameters-builtin
+        - include: parameter_declarations
+        - include: keywords-other
+        - include: main
+        - match: |-
+            (?xi)
+                \b(returns)                   # capture 1.
+                \s+
+                ([#@_a-zA-Z][#$@_a-zA-Z0-9]*)   # capture 2. data type
+                (?:\s*(\()([^)]+)(\)))?       # capture 3-5. optional data type argument, which is assumed to be numeric
+          captures:
+            1: keyword.other.returns.sql
+            2: storage.type.sql
+            3: punctuation.section.group.begin.sql
+            4: constant.numeric.sql
+            5: punctuation.section.group.end.sql
+        - match: (?i)\b(as)\b
+          scope: keyword.other.as.sql
+
